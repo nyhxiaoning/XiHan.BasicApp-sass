@@ -29,7 +29,7 @@ export function debounce<T extends (...args: never[]) => unknown>(fn: T, delay =
   return ((...args: Parameters<T>) => {
     if (timer)
       clearTimeout(timer)
-    timer = setTimeout(() => fn(...args), delay)
+    timer = setTimeout(fn, delay, ...args)
   }) as T
 }
 
@@ -59,7 +59,7 @@ export function deepClone<T>(obj: T): T {
     return obj.map(item => deepClone(item)) as unknown as T
   const cloned = {} as T
   for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+    if (Object.hasOwn(obj, key)) {
       cloned[key] = deepClone(obj[key])
     }
   }

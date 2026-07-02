@@ -59,6 +59,12 @@ import { requestClient } from '@/api/request'
 import { router } from '@/router'
 import { staticRoutes } from '@/router/routes'
 import { registerAppContext } from '~/stores/app-context'
+import {
+  mockLoginConfig,
+  mockLoginResponse,
+  mockPermissionInfo,
+  mockUserInfo,
+} from './mock-data'
 
 const viewModules = import.meta.glob('/src/views/**/*.vue')
 
@@ -131,7 +137,53 @@ async function postWithFallback<T>(url: string, data: unknown, fallback: T): Pro
   }
 }
 
+const useMock = import.meta.env.VITE_USE_MOCK === 'true'
+
 function createAuthApis() {
+  if (useMock) {
+    return {
+      getLoginConfigApi() {
+        return Promise.resolve(mockLoginConfig)
+      },
+      getPermissionsApi() {
+        return Promise.resolve(mockPermissionInfo)
+      },
+      getUserInfoApi() {
+        return Promise.resolve(mockUserInfo)
+      },
+      loginApi(input: LoginParams) {
+        return Promise.resolve(mockLoginResponse(input.username))
+      },
+      logoutApi() {
+        return Promise.resolve(undefined)
+      },
+      phoneLoginApi(_input: PhoneLoginParams) {
+        return Promise.resolve({ accessToken: 'mock_token', refreshToken: 'mock_refresh', tokenType: 'Bearer', expiresIn: 3600, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3600000).toISOString() })
+      },
+      emailLoginApi(_input: EmailLoginParams) {
+        return Promise.resolve({ accessToken: 'mock_token', refreshToken: 'mock_refresh', tokenType: 'Bearer', expiresIn: 3600, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3600000).toISOString() })
+      },
+      sendEmailLoginCodeApi(_email: string) {
+        return Promise.resolve({ expiresInSeconds: 300, debugCode: '123456' })
+      },
+      registerApi(_input: unknown) {
+        return Promise.resolve({ success: true })
+      },
+      createOAuthBindTicketApi() {
+        return Promise.resolve('mock_ticket')
+      },
+      requestPasswordResetApi(_email: string) {
+        return Promise.resolve({ accepted: true, debugResetUrl: '/auth/reset-password?token=mock_token' })
+      },
+      consumePasswordResetTokenApi(_token: string, _newPassword: string) {
+        return Promise.resolve({ success: true })
+      },
+      sendPhoneLoginCodeApi(_phone: string) {
+        return Promise.resolve({ expiresInSeconds: 300, debugCode: '123456' })
+      },
+    }
+  }
+
   return {
     getLoginConfigApi() {
       return getWithFallback<LoginConfig>('/Auth/LoginConfig', defaultLoginConfig)

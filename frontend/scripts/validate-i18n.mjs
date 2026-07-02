@@ -10,7 +10,7 @@
 //   3. 退出码非 0 表示校验失败，可挂 CI / 批末门禁。
 // 注：只能校验静态字面量 key；动态 key（变量/模板串拼接）无法静态验证，跳过。
 // ----------------------------------------------------------------
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -33,13 +33,15 @@ function loadModule(locale, name) {
 /** 解析 index.ts：得出 nest 模块名、spread 模块名、以及内联字面量对象（如 checkUpdates） */
 function parseIndex(locale) {
   const idx = read(join(LANGS, locale, 'index.ts'))
-  let body = idx.slice(idx.indexOf('export default') + 'export default'.length)
+  const body = idx.slice(idx.indexOf('export default') + 'export default'.length)
   const nest = []
   const spread = []
   for (const line of body.split('\n')) {
     let m
-    if ((m = line.match(/^\s*\.\.\.(\w+),/))) spread.push(m[1])
-    else if ((m = line.match(/^\s*(\w+),\s*$/))) nest.push(m[1])
+    if ((m = line.match(/^\s*\.\.\.(\w+),/)))
+      spread.push(m[1])
+    else if ((m = line.match(/^\s*(\w+),\s*$/)))
+      nest.push(m[1])
   }
   // 去掉 `  name,` 与 `  ...name,` 标识符行，剩下内联字面量（含注释）
   const inlineSrc = body
@@ -71,7 +73,8 @@ function flatten(o, prefix = '', acc = {}) {
   for (const k of Object.keys(o)) {
     const v = o[k]
     const key = prefix ? `${prefix}.${k}` : k
-    if (v && typeof v === 'object' && !Array.isArray(v)) flatten(v, key, acc)
+    if (v && typeof v === 'object' && !Array.isArray(v))
+      flatten(v, key, acc)
     else acc[key] = v
   }
   return acc
@@ -82,7 +85,8 @@ function walk(dir, out = []) {
     const p = join(dir, f)
     const st = statSync(p)
     if (st.isDirectory()) {
-      if (!/[\\/](node_modules|dist|\.git|\.turbo)([\\/]|$)/.test(p)) walk(p, out)
+      if (!/[\\/](node_modules|dist|\.git|\.turbo)([\\/]|$)/.test(p))
+        walk(p, out)
     }
     else if (/\.(vue|ts|tsx)$/.test(p) && !p.endsWith('.d.ts')) {
       out.push(p)
@@ -105,7 +109,7 @@ function main() {
 
   // 2) 孤儿键：扫全库 t()/$t() 字面量
   const topModules = new Set([...keys['zh-CN']].map(k => k.split('.')[0]))
-  const re = /(?:^|[^\w$])\$?t\(\s*['"]([a-z][\w]*(?:\.[\w]+)+)['"]/g
+  const re = /(?:^|[^\w$])\$?t\(\s*['"]([a-z]\w*(?:\.\w+)+)['"]/g
   const used = new Map()
   for (const dir of ['packages', 'src']) {
     const base = join(ROOT, dir)
@@ -117,7 +121,8 @@ function main() {
       let m
       while ((m = re.exec(txt))) {
         const key = m[1]
-        if (topModules.has(key.split('.')[0])) used.set(key, f)
+        if (topModules.has(key.split('.')[0]))
+          used.set(key, f)
       }
     }
   }

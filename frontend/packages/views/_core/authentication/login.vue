@@ -1,15 +1,19 @@
 <script lang="ts" setup>
 import type { FormInst, FormRules } from 'naive-ui'
 import type { LoginConfig, LoginResponse } from '~/types'
+import type { WhitelistAccount } from '~/utils/login-whitelist'
 import {
   NButton,
   NCheckbox,
   NDivider,
+  NEmpty,
   NForm,
   NFormItem,
   NIcon,
   NInput,
   NInputOtp,
+  NSpace,
+  NTag,
   useMessage,
 } from 'naive-ui'
 import { computed, nextTick, onMounted, ref } from 'vue'
@@ -18,6 +22,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useTheme } from '~/hooks'
 import { Icon } from '~/iconify'
 import { useAppContext, useAuthStore } from '~/stores'
+import { addToWhitelist, getBypassAccounts, getWhitelist, isInWhitelist, removeFromWhitelist } from '~/utils/login-whitelist'
 
 defineOptions({ name: 'LoginPage' })
 
@@ -62,6 +67,39 @@ const formData = ref({
   username: '',
   password: '',
 })
+
+// ==================== 白名单管理 ====================
+const whitelist = ref<WhitelistAccount[]>([])
+const newWhitelistUsername = ref('')
+const showWhitelistManager = ref(false)
+const bypassAccounts = ref<string[]>([])
+
+function loadWhitelist() {
+  whitelist.value = getWhitelist()
+  bypassAccounts.value = getBypassAccounts()
+}
+
+function handleAddToWhitelist() {
+  const username = newWhitelistUsername.value.trim()
+  if (!username) {
+    message.warning('请输入用户名')
+    return
+  }
+  if (isInWhitelist(username)) {
+    message.warning('该账号已在白名单中')
+    return
+  }
+  addToWhitelist(username)
+  newWhitelistUsername.value = ''
+  loadWhitelist()
+  message.success('已添加到白名单')
+}
+
+function handleRemoveFromWhitelist(username: string) {
+  removeFromWhitelist(username)
+  loadWhitelist()
+  message.success('已从白名单中移除')
+}
 
 const rules: FormRules = {
   username: [
@@ -137,6 +175,11 @@ async function handleLogin() {
   try {
     if (tfStage.value === 'credentials') {
       await formRef.value?.validate()
+
+      if (!isInWhitelist(formData.value.username)) {
+        message.error('该账号不在白名单中，无法登录')
+        return
+      }
     }
 
     const result: LoginResponse | null = await authStore.login(buildLoginParams(), redirect.value)
@@ -254,6 +297,7 @@ function goTo(path: string) {
 }
 
 onMounted(async () => {
+  loadWhitelist()
   try {
     await loadLoginConfig()
   }
@@ -486,6 +530,87 @@ onMounted(async () => {
               {{ acc.label }}
             </NButton>
           </div>
+
+          <!-- 白名单管理 -->
+          <div class="mt-4">
+            <NButton
+              quaternary
+              class="!text-sm"
+              @click="showWhitelistManager = !showWhitelistManager"
+            >
+              <template #icon>
+                <NIcon size="14">
+                  <Icon :icon="showWhitelistManager ? 'lucide:chevron-up' : 'lucide:chevron-down'" />
+                </NIcon>
+              </template>
+              登录白名单管理 ({{ whitelist.length }})
+            </NButton>
+
+            <div v-if="showWhitelistManager" class="mt-3 p-3 rounded-xl border" :class="isDark ? 'border-white/10 bg-white/5' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]'">
+              <NSpace vertical :size="12">
+                <div class="flex gap-2">
+                  <NInput
+                    v-model:value="newWhitelistUsername"
+                    size="small"
+                    placeholder="输入用户名添加到白名单"
+                    @keydown.enter="handleAddToWhitelist"
+                  />
+                  <NButton
+                    type="primary"
+                    size="small"
+                    :disabled="!newWhitelistUsername.trim()"
+                    @click="handleAddToWhitelist"
+                  >
+                    添加
+                  </NButton>
+                </div>
+
+                <div v-if="bypassAccounts.length > 0">
+                  <div class="text-xs mb-2" :class="isDark ? 'text-gray-400' : 'text-[hsl(var(--muted-foreground))]'">
+                    测试账号（始终允许登录）
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <NTag
+                      v-for="account in bypassAccounts"
+                      :key="account"
+                      size="small"
+                      type="success"
+                    >
+                      {{ account }}
+                    </NTag>
+                  </div>
+                  <div class="text-xs mt-2" :class="isDark ? 'text-gray-500' : 'text-[hsl(var(--muted-foreground)/0.6)]'">
+                    <Icon icon="lucide:info" class="inline mr-1" size="12" />
+                    测试账号默认密码格式: 账号前缀首字母大写 + @123 (如 SuperAdmin@123)
+                  </div>
+                </div>
+
+                <div v-if="whitelist.length === 0 && bypassAccounts.length === 0">
+                  <NEmpty description="白名单为空，请添加账号" size="small" />
+                </div>
+
+                <div v-if="whitelist.length > 0">
+                  <div class="text-xs mb-2" :class="isDark ? 'text-gray-400' : 'text-[hsl(var(--muted-foreground))]'">
+                    用户白名单
+                  </div>
+                  <div class="whitelist-scroll-container">
+                    <div class="flex flex-wrap gap-2">
+                      <NTag
+                        v-for="item in whitelist"
+                        :key="item.username"
+                        closable
+                        size="small"
+                        type="warning"
+                        @close="handleRemoveFromWhitelist(item.username)"
+                      >
+                        {{ item.label || item.username }}
+                      </NTag>
+                    </div>
+                  </div>
+                </div>
+              </NSpace>
+            </div>
+          </div>
         </NForm>
 
         <p
@@ -545,5 +670,28 @@ onMounted(async () => {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateX(-24px);
+}
+
+.whitelist-scroll-container {
+  max-height: 120px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.whitelist-scroll-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.whitelist-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.whitelist-scroll-container::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 2px;
+}
+
+.whitelist-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
 }
 </style>
